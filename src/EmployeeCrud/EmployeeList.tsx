@@ -1,249 +1,113 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// src/components/EmployeeList.tsx
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
-// Types
-interface Competency {
+// src/types.ts
+export interface Competency {
   id: number;
+  employee_id: number;
   competency_id: number;
   required_score: number;
   actual_score: number | null;
-  name?: string; // Added after joining with competency data
 }
 
-interface Department {
-  id: number;
-  name: string;
-}
-
-enum EvaluationStatus {
-  PENDING = "PENDING",
-  IN_PROGRESS = "IN_PROGRESS",
-  COMPLETED = "COMPLETED"
-}
-
-interface Employee {
+export interface Employee {
   id: number;
   emp_number: string;
   job_code: string;
   emp_name: string;
   job_role: string;
   department_id: number;
-  evaluation_status: EvaluationStatus;
+  evaluation_status: string;
   last_evaluated_date: string | null;
-  department: Department;
-  competencies: Competency[];
 }
 
 const EmployeeList: React.FC = () => {
-  // State
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [competencies, setCompetencies] = useState<{[key: number]: string}>({});
-  const [expandedEmployees, setExpandedEmployees] = useState<{[key: number]: boolean}>({});
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const token = localStorage.getItem("token")
-  // Fetch employees and competencies on component mount
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Fetch competencies first
-        const compResponse = await axios.get('http://127.0.0.1:8000/competencies',{
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const compData = compResponse.data.reduce((acc: {[key: number]: string}, comp: {id: number, name: string}) => {
-          acc[comp.id] = comp.name;
-          return acc;
-        }, {});
-        setCompetencies(compData);
-        
-        // Fetch employees
-        const empResponse = await axios.get('http://127.0.0.1:8000/employees',{
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setEmployees(empResponse.data);
-        
-        setError(null);
-      } catch (err) {
-        setError('Failed to fetch data. Please try again later.');
-        console.error('Error fetching data:', err);
-      } finally {
-        setIsLoading(false);
-      }
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [competencies, setCompetencies] = useState<Competency[]>([]);
+    const [expandedEmployeeId, setExpandedEmployeeId] = useState<number | null>(null);
+
+    useEffect(() => {
+        // Fetch employees and competencies data
+        axios.get<Employee[]>("http://localhost:8000/employees")
+            .then((response) => {
+                setEmployees(response.data);
+            })
+            .catch((error) => {
+                console.error("Error fetching employees:", error);
+            });
+
+        axios.get<Competency[]>("http://localhost:8000/employee-competencies")
+            .then((response) => {
+                setCompetencies(response.data);
+            })
+            .catch((error) => {
+                console.error("Error fetching competencies:", error);
+            });
+    }, []);
+
+    const toggleExpand = (employeeId: number) => {
+        setExpandedEmployeeId((prev) => (prev === employeeId ? null : employeeId));
     };
 
-    fetchData();
-  }, []);
+    const getCompetenciesForEmployee = (employeeId: number) => {
+        return competencies.filter((comp) => comp.employee_id === employeeId);
+    };
 
-  // Toggle expanded state for an employee
-  const toggleExpand = (employeeId: number) => {
-    setExpandedEmployees(prev => ({
-      ...prev,
-      [employeeId]: !prev[employeeId]
-    }));
-  };
-
-  // Calculate average score for an employee
-  const calculateAverageScore = (competencies: Competency[]): string => {
-    const scores = competencies
-      .filter(comp => comp.actual_score !== null)
-      .map(comp => comp.actual_score as number);
-    
-    if (scores.length === 0) return 'N/A';
-    
-    const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-    return average.toFixed(1);
-  };
-
-  // Format date
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return 'Not evaluated';
-    
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  // Get status color
-  const getStatusColor = (status: EvaluationStatus): string => {
-    switch (status) {
-      case EvaluationStatus.PENDING:
-        return 'bg-yellow-100 text-yellow-800';
-      case EvaluationStatus.IN_PROGRESS:
-        return 'bg-blue-100 text-blue-800';
-      case EvaluationStatus.COMPLETED:
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Get score color based on value
-  const getScoreColor = (score: number | null, required: number): string => {
-    if (score === null) return 'text-gray-500';
-    if (score >= required) return 'text-green-600 font-medium';
-    return 'text-red-600 font-medium';
-  };
-
-  if (isLoading) {
-    return <div className="p-6 text-center">Loading employees...</div>;
-  }
-
-  if (error) {
-    return <div className="p-6 text-center text-red-600">{error}</div>;
-  }
-
-  if (employees.length === 0) {
-    return <div className="p-6 text-center">No employees found.</div>;
-  }
-
-  return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-6">Employee List</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {employees.map(employee => {
-          const isExpanded = expandedEmployees[employee.id] || false;
-          const averageScore = calculateAverageScore(employee.competencies);
-          
-          return (
-            <div 
-              key={employee.id} 
-              className={`border rounded-lg shadow-sm overflow-hidden transition-all duration-300 ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}
-            >
-              {/* Header - Always visible */}
-              <div 
-                className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-                onClick={() => toggleExpand(employee.id)}
-              >
-                <div>
-                  <h3 className="font-bold text-lg">{employee.emp_name}</h3>
-                  <p className="text-gray-600">{employee.job_role}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold">
-                    {averageScore !== 'N/A' ? (
-                      <span className={parseFloat(averageScore) >= 7 ? 'text-green-600' : 'text-orange-500'}>
-                        {averageScore}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">{averageScore}</span>
-                    )}
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(employee.evaluation_status)}`}>
-                    {employee.evaluation_status.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Expanded content */}
-              {isExpanded && (
-                <div className="p-4 border-t">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Employee Number</p>
-                      <p className="font-medium">{employee.emp_number}</p>
+    return (
+        <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "20px" }}>Employee List</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
+                {employees.map((employee) => (
+                    <div
+                        key={employee.id}
+                        style={{
+                            border: "1px solid #ccc",
+                            borderRadius: "8px",
+                            padding: "16px",
+                            cursor: "pointer",
+                            backgroundColor: expandedEmployeeId === employee.id ? "#f9f9f9" : "#fff",
+                        }}
+                        onClick={() => toggleExpand(employee.id)}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h3 style={{ fontSize: "18px", fontWeight: "bold" }}>{employee.emp_name}</h3>
+                            <span style={{ fontSize: "14px", color: "#666" }}>ID: {employee.id}</span>
+                        </div>
+                        {expandedEmployeeId === employee.id && (
+                            <div style={{ marginTop: "16px" }}>
+                                <p><strong>Employee Number:</strong> {employee.emp_number}</p>
+                                <p><strong>Job Code:</strong> {employee.job_code}</p>
+                                <p><strong>Job Role:</strong> {employee.job_role}</p>
+                                <p><strong>Department ID:</strong> {employee.department_id}</p>
+                                <p><strong>Evaluation Status:</strong> {employee.evaluation_status}</p>
+                                <p><strong>Last Evaluated Date:</strong> {employee.last_evaluated_date || "N/A"}</p>
+                                <h4 style={{ fontSize: "16px", fontWeight: "bold", marginTop: "16px" }}>Competencies</h4>
+                                <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "8px" }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: "#f1f1f1" }}>
+                                            <th style={{ padding: "8px", border: "1px solid #ddd" }}>Competency ID</th>
+                                            <th style={{ padding: "8px", border: "1px solid #ddd" }}>Required Score</th>
+                                            <th style={{ padding: "8px", border: "1px solid #ddd" }}>Actual Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {getCompetenciesForEmployee(employee.id).map((comp) => (
+                                            <tr key={comp.id}>
+                                                <td style={{ padding: "8px", border: "1px solid #ddd", textAlign: "center" }}>{comp.competency_id}</td>
+                                                <td style={{ padding: "8px", border: "1px solid #ddd", textAlign: "center" }}>{comp.required_score}</td>
+                                                <td style={{ padding: "8px", border: "1px solid #ddd", textAlign: "center" }}>{comp.actual_score || "N/A"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Job Code</p>
-                      <p className="font-medium">{employee.job_code}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Department</p>
-                      <p className="font-medium">{employee.department.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Last Evaluated</p>
-                      <p className="font-medium">{formatDate(employee.last_evaluated_date)}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Competencies */}
-                  {employee.competencies.length > 0 ? (
-                    <div>
-                      <h4 className="font-medium mb-2">Competencies</h4>
-                      <div className="bg-white rounded border overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Competency</th>
-                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Required</th>
-                              <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actual</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {employee.competencies.map(comp => (
-                              <tr key={comp.id}>
-                                <td className="px-4 py-2 whitespace-nowrap">
-                                  {competencies[comp.competency_id] || `Competency #${comp.competency_id}`}
-                                </td>
-                                <td className="px-4 py-2 text-center whitespace-nowrap">
-                                  {comp.required_score}
-                                </td>
-                                <td className={`px-4 py-2 text-center whitespace-nowrap ${getScoreColor(comp.actual_score, comp.required_score)}`}>
-                                  {comp.actual_score !== null ? comp.actual_score : 'Not rated'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 italic">No competencies assigned</p>
-                  )}
-                </div>
-              )}
+                ))}
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export default EmployeeList;
