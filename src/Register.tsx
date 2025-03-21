@@ -59,8 +59,8 @@ const Register: React.FC = () => {
         </div>
         <div>
           <label>Department Name:</label>
-          <select value={role} onChange={(e) => setDepartmentName(e.target.value)}>
-            <option value="HR">HR</option>
+          <select value={departmentName} onChange={(e) => setDepartmentName(e.target.value)}>
+            <option value="HR">select dept</option>
             <option value="IT">IT</option>
             <option value="Fincance">Fincance</option>
             <option value="Functional">Functional</option>
